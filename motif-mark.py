@@ -331,7 +331,7 @@ numlines = sum([len(recs[rec].lines) for rec in recs])
 
 with cairo.ImageSurface(cairo.FORMAT_ARGB32,
                         IMAGE_WIDTH + 10*FONTSIZE, 
-                        ROW_HEIGHT*(max(len(motifs),numlines))) as surface:
+                        ROW_HEIGHT*(max(len(motifs),numlines)) + 5) as surface:
 
     # Set up context
     ctx = cairo.Context(surface)
