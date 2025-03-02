@@ -14,27 +14,28 @@ FONTSIZE = 14
 HEADING_OFFSET = ROW_HEIGHT//5
 ROW_OFFSET = -ROW_HEIGHT//2 
 MARKDIMS = (4, EXON_HEIGHT)
+
 COLORS = [
-    (220/255, 20/255, 60/255),    # Crimson
-    (34/255, 139/255, 34/255),    # Forest Green
-    (0, 0, 139/255),      # Dark Blue
-    (255/255, 223/255, 0),    # Gold
-    (0, 255/255, 255/255),    # Cyan
-    (255/255, 0, 255/255),    # Magenta
-    (255/255, 165/255, 0),    # Orange
-    (128/255, 0, 128/255),    # Purple
-    (0, 128/255, 0),      # Dark Green
-    (186/255, 85/255, 211/255),   # Medium Orchid
-    (255/255, 105/255, 180/255),  # Hot Pink
-    (255/255, 99/255, 71/255),    # Tomato Red
-    (0, 128/255, 128/255),    # Teal
-    (255/255, 192/255, 203/255),  # Light Pink
-    (255/255, 255/255, 0),    # Yellow
-    (240/255, 128/255, 128/255),  # Light Coral
-    (0, 0, 255/255),      # Blue
-    (0, 255/255, 0),      # Green
-    (255/255, 0, 0),      # Red
-    (255/255, 228/255, 181/255),  # Moccasin
+    (220/255, 20/255, 60/255),      # Crimson
+    (34/255, 139/255, 34/255),      # Forest Green
+    (0, 0, 139/255),                # Dark Blue
+    (255/255, 223/255, 0),          # Gold
+    (0, 255/255, 255/255),          # Cyan
+    (255/255, 0, 255/255),          # Magenta
+    (255/255, 165/255, 0),          # Orange
+    (128/255, 0, 128/255),          # Purple
+    (0, 128/255, 0),                # Dark Green
+    (186/255, 85/255, 211/255),     # Medium Orchid
+    (255/255, 105/255, 180/255),    # Hot Pink
+    (255/255, 99/255, 71/255),      # Tomato Red
+    (0, 128/255, 128/255),          # Teal
+    (255/255, 192/255, 203/255),    # Light Pink
+    (255/255, 255/255, 0),          # Yellow
+    (240/255, 128/255, 128/255),    # Light Coral
+    (0, 0, 255/255),                # Blue
+    (0, 255/255, 0),                # Green
+    (255/255, 0, 0),                # Red
+    (255/255, 228/255, 181/255),    # Moccasin
 ]
 
 
@@ -44,7 +45,7 @@ DEGEN_BASES = {
     'C': '[C]',     'c': '[c]',
     'G': '[G]',     'g': '[g]',
     'U': '[U]',     'u': '[u]',
-    'R': '[AG]',    'r': '[ag]',        # Purine
+    'R': '[AG]',    'r': '[ag]',       # Purine
     'Y': '[CT]',    'y': '[ct]',       # Pyrimidine
     'S': '[GC]',    's': '[gc]',       # Strong 
     'W': '[AT]',    'w': '[at]',       # Weak
@@ -138,6 +139,46 @@ def get_mots(mFile: str) -> tuple:
 
     return (motifs, revmots)
 
+def get_recs(faFile,motifs,revmots) -> dict:
+    currGene=''
+    currSeq=''
+    recs = {}
+    with open(faFile, 'r') as f:
+
+        line = f.readline().strip()
+
+        while line:
+            header = line
+            line = line[1:].split()
+            currGene = line[0]
+            loc = line[1]
+            
+            line = f.readline().strip()
+
+            while line[0] != ">":
+                currSeq += line
+
+                line = f.readline().strip()
+
+                if not line: 
+                    break
+
+            chrom,pos = loc.split(":")
+            length = len(currSeq)
+            
+
+            if "rev" in header:
+                currMots = revmots
+            else:
+                currMots = motifs
+
+            recs[currGene] = Record(header,currSeq, chrom,pos,length,currGene, currMots)
+
+            # print(recs[currGene])
+            currSeq = ''
+
+    return recs
+
 class Record():
     def __init__(self, 
                  header: str,
@@ -157,17 +198,17 @@ class Record():
         self.gname = gname                          # name of gene
         self.lines = self.get_lines()
         self.motifs = self.find_motifs(motifs)      # list of motif objects
-        
-
+        # self.title = f'>{gname} ({length} bp, ({self.strand}) strand):'
+        self.title = f'{header}'
 
     def __str__(self):
-        # return f'{self.header}\n{self.gname}, ' \
-        # f'{self.pos}, ' \
-        # f'{self.length}'
 
-        # return f'{self.header}:'
+        words = f'{self.header}:'
 
-        return f'>{self.gname} ({self.length} bp, ({self.strand}) strand):'
+        for mot in self.motifs:
+            words += f'\n{mot}\t{len(mot)}'
+
+        return words
         
                 
     def get_lines(self):
@@ -191,18 +232,21 @@ class Record():
 
     def draw(self, row: int, ctx):
         '''
-        _summary_
+        Draws record to an existing context object, returns the new row value
 
         Args:
-            row (int): _description_
-            ctx (_type_): _description_
+            row (int): counter for current row in image
+            ctx (_type_): cairo.Context object
+
+        Returns:
+            new row value after drawing record
         '''
 
         # Write label
         x = INDENT
         y = row*ROW_HEIGHT - HEADING_OFFSET + ROW_OFFSET 
         ctx.move_to(x,y)
-        ctx.show_text(str(self),)
+        ctx.show_text(self.title)
 
         for i,line in enumerate(self.lines):
             x2 = INDENT
@@ -268,49 +312,6 @@ class Motif():
         return f'''{self.seq}, {self.length}, {self.start}'''
 
 
-def get_recs(faFile,motifs,revmots) -> dict:
-    currGene=''
-    currSeq=''
-    recs = {}
-    with open(faFile, 'r') as f:
-
-        line = f.readline().strip()
-
-        while line:
-            header = line
-            line = line[1:].split()
-            currGene = line[0]
-            loc = line[1]
-            
-            line = f.readline().strip()
-
-            while line[0] != ">":
-                currSeq += line
-
-                line = f.readline().strip()
-
-                if not line: 
-                    break
-
-            chrom,pos = loc.split(":")
-
-            # pos = tuple(int(i) for i in pos.split("-"))
-
-            # length = pos[1] - pos[0]
-            length = len(currSeq)
-            
-
-            if "rev" in header:
-                currMots = revmots
-            else:
-                currMots = motifs
-
-            recs[currGene] = Record(header,currSeq, chrom,pos,length,currGene, currMots)
-
-            currSeq = ''
-
-    return recs
-
 ### Main ###
 
 args = get_args()
@@ -327,7 +328,9 @@ markcolors.update({seq:color for seq,color in zip(list(revmots), COLORS[:len(mot
 
 recs = get_recs(faFile,motifs,revmots)
 
+
 numlines = sum([len(recs[rec].lines) for rec in recs])
+
 
 with cairo.ImageSurface(cairo.FORMAT_ARGB32,
                         IMAGE_WIDTH + 10*FONTSIZE, 
@@ -364,18 +367,10 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
         ctx.fill()
         ctx.set_source_rgba(0,0,0,1)
 
-
         x = IMAGE_WIDTH + 25
         y = (row+i)*ROW_HEIGHT//2 + 5
         ctx.move_to(x,y)
         ctx.show_text(f'{motif}')
-
-        # x += 13*FONTSIZE - 2*ROW_HEIGHT
-        # y += 1
-        # ctx.set_source_rgba(*markcolors[motif])
-        # ctx.rectangle(x,y,len(motif),EXON_HEIGHT//2)
-        # ctx.fill()
-        # ctx.set_source_rgba(0,0,0,1)
 
     # write to file
     surface.write_to_png(f"{basename}.png")
