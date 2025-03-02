@@ -21,7 +21,7 @@ python motif-mark.py -f <path_to_fasta_file> -m <path_to_motifs_file>
 
 Example Input:
 ```
-python motif-mark.py -f Figure_1.fasta -m Fig_1_motifs.txt
+python motif-mark.py -f ./Figure_1.fasta -m ./Fig_1_motifs.txt
 ```
 
 Example Output:
