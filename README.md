@@ -24,7 +24,7 @@ Example Input:
 python motif-mark.py -f ./Figure_1.fasta -m ./Fig_1_motifs.txt
 ```
 
-Example Output: (better viewed in light mode :) )
+Example Output: (better if viewed in light mode :) )
 
 ![Example Output](./Figure_1.png)
 
