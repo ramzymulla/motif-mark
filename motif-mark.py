@@ -5,15 +5,18 @@ import re
 import textwrap
 
 ### GLOBALS ###
-BP_PER_PIXEL = 1
-ROW_HEIGHT = 50
-EXON_HEIGHT = ROW_HEIGHT//2
-IMAGE_WIDTH = 1000
-INDENT = 5
-FONTSIZE = 14
-HEADING_OFFSET = ROW_HEIGHT//5
-ROW_OFFSET = -ROW_HEIGHT//2 
-MARKDIMS = (4, EXON_HEIGHT)
+BP_PER_PIXEL = 1                    # how many bps in each horizontal pixel
+ROW_HEIGHT = 50                     # how many pixels in each row
+EXON_HEIGHT = ROW_HEIGHT//2         # how tall to draw the exon boxes
+MOTIF_STAGGER = 2                   # how much to stagger the motifs
+MARK_HEIGHT = EXON_HEIGHT - \
+                MOTIF_STAGGER*2     # how tall to draw the marks
+RECORD_WIDTH = 1000                 # maximum width (in pixels) to draw each record
+INDENT = 5                          # how many pixels (from left) to indent the image
+FONT = "Arial"                      # text font
+FONTSIZE = 14                       # text font size
+HEADING_OFFSET = ROW_HEIGHT//5      # vertical offset for row headings
+ROW_OFFSET = -ROW_HEIGHT//2         # vertical offset for row contents
 
 COLORS = [
     (220/255, 20/255, 60/255),      # Crimson
@@ -139,7 +142,18 @@ def get_mots(mFile: str) -> tuple:
 
     return (motifs, revmots)
 
-def get_recs(faFile,motifs,revmots) -> dict:
+def get_recs(faFile: str, motifs: dict,revmots: dict) -> dict:
+    '''
+    generates dictionary of Record objects from a fasta file and motif dictionaries
+
+    Args:
+        faFile (str): destination of fasta file
+        motifs (dict): dictionary of motifs and their regex patterns
+        revmots (dict): reverse complement to the motifs dictionary
+
+    Returns:
+        dict: Records dictionary with gene names as the keys
+    '''
     currGene=''
     currSeq=''
     recs = {}
@@ -198,7 +212,7 @@ class Record():
         self.gname = gname                          # name of gene
         self.lines = self.get_lines()
         self.motifs = self.find_motifs(motifs)      # list of motif objects
-        # self.title = f'>{gname} ({length} bp, ({self.strand}) strand):'
+        # self.title = f'>{gname}, Chromosome {chrom}, ({length} bp, ({self.strand}) strand):'
         self.title = f'{header}'
 
     def __str__(self):
@@ -213,7 +227,7 @@ class Record():
                 
     def get_lines(self):
 
-        wid = (IMAGE_WIDTH-2*INDENT)*BP_PER_PIXEL
+        wid = (RECORD_WIDTH-2*INDENT)*BP_PER_PIXEL
 
         lines = textwrap.wrap(self.seq, width=wid)
         seglines = []
@@ -268,18 +282,18 @@ class Record():
                     x2 += len(seg)
                     y = (row+i)*ROW_HEIGHT + ROW_OFFSET
                     ctx.rectangle(x1,y,len(seg),EXON_HEIGHT)
-
-        for motif in self.motifs:
-            for mot in self.motifs[motif]:
-                ctx.set_source_rgba(*markcolors[mot.seq],0.8)
-                ctx.rectangle(mot.x,mot.y+row*ROW_HEIGHT,len(mot.seq),MARKDIMS[1])
-                ctx.fill()
-                ctx.set_source_rgba(0,0,0,1)
+        
+        for i,mot in enumerate(self.motifs):
+            ctx.set_source_rgba(*markcolors[mot.seq],0.8)
+            stag = MOTIF_STAGGER if  i%2==0 else -MOTIF_STAGGER
+            ctx.rectangle(mot.x,mot.y+row*ROW_HEIGHT + stag,len(mot.seq),MARK_HEIGHT)
+            ctx.fill()
+            ctx.set_source_rgba(0,0,0,1)
                 
         return row + len(self.lines)
         
 
-    def find_motifs(self, motifs: dict) -> dict:
+    def find_motifs(self, motifs: dict) -> list:
         '''
         _summary_
 
@@ -289,11 +303,14 @@ class Record():
         Returns:
             dict: _description_
         '''
-        mots = {}
+        mots = []
         for mot in motifs:
             mot_locs = [match.start() for match in re.finditer(motifs[mot],self.seq)]
             if len(mot_locs) != 0:
-                mots[mot] = [Motif(mot,mot_locs[i]) for i in range(len(mot_locs))]
+                mots += [Motif(mot,mot_locs[i]) for i in range(len(mot_locs))]
+
+        # sort motifs by position
+        mots = sorted(mots,key = lambda x: x.start)
 
         return mots
 
@@ -302,9 +319,9 @@ class Motif():
         self.seq = seq
         self.length = len(seq)
         self.start = start
-        self.x = start%(IMAGE_WIDTH*BP_PER_PIXEL) + INDENT
-        self.y = (start//(IMAGE_WIDTH*BP_PER_PIXEL))*ROW_HEIGHT +\
-              (EXON_HEIGHT-MARKDIMS[1])//2 + ROW_OFFSET
+        self.x = start%(RECORD_WIDTH*BP_PER_PIXEL) + INDENT
+        self.y = (start//(RECORD_WIDTH*BP_PER_PIXEL))*ROW_HEIGHT +\
+              (EXON_HEIGHT-MARK_HEIGHT)//2 + ROW_OFFSET
         self.color = markcolors[seq]
 
 
@@ -323,7 +340,7 @@ basename = os.path.basename(faFile).split('.')[0]
 motifs,revmots = get_mots(mFile)
 
 markcolors = {seq:color for seq,color in zip(list(motifs), COLORS[:len(motifs)])}
-markcolors.update({seq:color for seq,color in zip(list(revmots), COLORS[:len(motifs)])})
+markcolors.update({revcomp(seq):color for seq,color in zip(list(motifs), COLORS[:len(motifs)])})
 
 
 recs = get_recs(faFile,motifs,revmots)
@@ -333,7 +350,7 @@ numlines = sum([len(recs[rec].lines) for rec in recs])
 
 
 with cairo.ImageSurface(cairo.FORMAT_ARGB32,
-                        IMAGE_WIDTH + 10*FONTSIZE, 
+                        RECORD_WIDTH + 10*FONTSIZE + 2*INDENT, 
                         ROW_HEIGHT*(max(len(motifs),numlines)) + 5) as surface:
 
     # Set up context
@@ -342,7 +359,7 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
     ctx.set_source_rgba(0,0,0,1)
     ctx.set_operator(cairo.OPERATOR_ADD)
 
-    ctx.select_font_face("Arial", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+    ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
     ctx.set_font_size(FONTSIZE)
 
     # Start at row #1
@@ -354,20 +371,29 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
 
     # draw legend
     row = 1
-    x = IMAGE_WIDTH+1
+
+    # show legend title text
+    x = RECORD_WIDTH - 15
     y = row*ROW_HEIGHT - HEADING_OFFSET + ROW_OFFSET 
     ctx.move_to(x,y)
     ctx.show_text("LEGEND:")
     
+    # iterae through motifs
     for i,motif in enumerate(motifs):
-        x = IMAGE_WIDTH + 15 - len(motif)
+        # set x,y coords
+        x = RECORD_WIDTH + 2*INDENT - len(motif)
         y = (row+i)*ROW_HEIGHT//2 - EXON_HEIGHT//4 
+
+        # set color and width based on the motif
         ctx.set_source_rgba(*markcolors[motif])
         ctx.rectangle(x,y,len(motif),EXON_HEIGHT//2)
+
+        # draw motif box
         ctx.fill()
         ctx.set_source_rgba(0,0,0,1)
 
-        x = IMAGE_WIDTH + 25
+        # show motif sequence
+        x = RECORD_WIDTH + 25
         y = (row+i)*ROW_HEIGHT//2 + 5
         ctx.move_to(x,y)
         ctx.show_text(f'{motif}')
