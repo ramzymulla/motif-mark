@@ -91,9 +91,9 @@ def get_args():
                                 motifs that you would like to mark (one motif per line). Each sequence in the fasta
                                 file must be <= 1000 bp, and each motif must be <= 10 bp.
                                 ###''') 
-    parser.add_argument("-f", "--fasta-file", help="path to input fasta file",
+    parser.add_argument("-f", "--fasta", help="path to input fasta file",
                         required=True)
-    parser.add_argument("-m", "--motifs-file", help="path to input motifs file",
+    parser.add_argument("-m", "--motifs", help="path to input motifs file",
                         required=True)
     return parser.parse_args()
 
@@ -204,16 +204,16 @@ class Record():
                  motifs: dict) -> None:
     
         self.header = header
-        self.pos = pos                              # leftmost mapping position
-        self.strand = "-" if "rev" in header else "+"
+        self.pos = pos                              # mapping position
+        self.strand = "-" if "reverse" in header else "+"
         self.chrom = chrom
         self.seq = seq                              # sequence
         self.length = length                        # sequence length
         self.gname = gname                          # name of gene
         self.lines = self.get_lines()
         self.motifs = self.find_motifs(motifs)      # list of motif objects
-        # self.title = f'>{gname}, Chromosome {chrom}, ({length} bp, ({self.strand}) strand):'
-        self.title = f'{header}'
+        self.title = f'{gname} ({chrom}:{pos}, ({self.strand}) strand): {len(self.motifs)} motifs'
+        # self.title = f'{header}'
 
     def __str__(self):
 
@@ -225,7 +225,14 @@ class Record():
         return words
         
                 
-    def get_lines(self):
+    def get_lines(self) -> list:
+        '''
+        splits record into lines based on drawn image width, then splits each line
+        into intron/exon segments
+
+        Returns:
+            list: list of tuples containing intron/exon segments for each line in the record
+        '''
 
         wid = (RECORD_WIDTH-2*INDENT)*BP_PER_PIXEL
 
@@ -283,6 +290,7 @@ class Record():
                     y = (row+i)*ROW_HEIGHT + ROW_OFFSET
                     ctx.rectangle(x1,y,len(seg),EXON_HEIGHT)
         
+        # draw motifs
         for i,mot in enumerate(self.motifs):
             ctx.set_source_rgba(*markcolors[mot.seq],0.8)
             stag = MOTIF_STAGGER if  i%2==0 else -MOTIF_STAGGER
@@ -295,24 +303,22 @@ class Record():
 
     def find_motifs(self, motifs: dict) -> list:
         '''
-        _summary_
+        finds loci of each motif in the record
 
         Args:
-            motifs (dict): _description_
+            motifs (dict): regex dictionary for each motif
 
         Returns:
-            dict: _description_
+            list: Motif objects sorted by starting position
         '''
         mots = []
         for mot in motifs:
             mot_locs = [match.start() for match in re.finditer(motifs[mot],self.seq)]
             if len(mot_locs) != 0:
                 mots += [Motif(mot,mot_locs[i]) for i in range(len(mot_locs))]
-
-        # sort motifs by position
-        mots = sorted(mots,key = lambda x: x.start)
-
-        return mots
+       
+        # return motifs sorted by starting position
+        return sorted(mots,key = lambda x: x.start) 
 
 class Motif():
     def __init__(self, seq: str, start: int):
@@ -339,16 +345,17 @@ basename = os.path.basename(faFile).split('.')[0]
 
 motifs,revmots = get_mots(mFile)
 
+# designate colors for each motif 
 markcolors = {seq:color for seq,color in zip(list(motifs), COLORS[:len(motifs)])}
 markcolors.update({revcomp(seq):color for seq,color in zip(list(motifs), COLORS[:len(motifs)])})
 
-
+# generate Records
 recs = get_recs(faFile,motifs,revmots)
 
-
+# calculate total number of lines to draw
 numlines = sum([len(recs[rec].lines) for rec in recs])
 
-
+# start drawing
 with cairo.ImageSurface(cairo.FORMAT_ARGB32,
                         RECORD_WIDTH + 10*FONTSIZE + 2*INDENT, 
                         ROW_HEIGHT*(max(len(motifs),numlines)) + 5) as surface:
@@ -378,7 +385,7 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
     ctx.move_to(x,y)
     ctx.show_text("LEGEND:")
     
-    # iterae through motifs
+    # iterate through motifs
     for i,motif in enumerate(motifs):
         # set x,y coords
         x = RECORD_WIDTH + 2*INDENT - len(motif)
