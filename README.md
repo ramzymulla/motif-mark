@@ -1,6 +1,6 @@
 # motif-mark
 
-```motif-mark.py``` is a simple python program that visualizes motifs in nucleotide sequences. It takes two inputs:
+![motif-mark-oop.py](./motif-mark-oop.py) is a simple python program that visualizes motifs in nucleotide sequences. It takes two inputs:
 1. a FASTA file with read lengths $\leq$ 1000 bp (introns in lowercase, exons in uppercase)
 2. a text file with the motif sequences of $\leq$ 10 bp per motif (one motif per line)
 
