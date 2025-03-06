@@ -91,9 +91,9 @@ def get_args():
                                 motifs that you would like to mark (one motif per line). Each sequence in the fasta
                                 file must be <= 1000 bp, and each motif must be <= 10 bp.
                                 ###''') 
-    parser.add_argument("-f", "--fasta", help="path to input fasta file",
+    parser.add_argument("-f", "--fasta-file", help="path to input fasta file",
                         required=True)
-    parser.add_argument("-m", "--motifs", help="path to input motifs file",
+    parser.add_argument("-m", "--motifs-file", help="path to input motifs file",
                         required=True)
     return parser.parse_args()
 
