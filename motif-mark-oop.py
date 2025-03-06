@@ -8,7 +8,7 @@ import textwrap
 BP_PER_PIXEL = 1                    # how many bps in each horizontal pixel
 ROW_HEIGHT = 50                     # how many pixels in each row
 EXON_HEIGHT = ROW_HEIGHT//2         # how tall to draw the exon boxes
-MOTIF_STAGGER = 2                   # how much to stagger the motifs
+MOTIF_STAGGER = 1                   # how much to stagger the motifs
 MARK_HEIGHT = EXON_HEIGHT - \
                 MOTIF_STAGGER*2     # how tall to draw the marks
 RECORD_WIDTH = 1000                 # maximum width (in pixels) to draw each record
@@ -119,7 +119,7 @@ def get_reg(seq: str) -> str:
     return reg[1:]
 
 
-def get_mots(mFile: str) -> tuple:
+def get_mots(mFile: str) -> dict:
     '''
     takes motifs file and outputs dictionary of motifs and their 
     corresponding regular expressions
@@ -132,24 +132,20 @@ def get_mots(mFile: str) -> tuple:
     '''
 
     motifs={}
-    revmots = {}
     with open(mFile, 'r') as m:
         for mot in m:
             mot = mot.strip()
-            revmot = revcomp(mot)
             motifs[mot] = get_reg(mot)
-            revmots[revmot] = get_reg(revmot)
 
-    return (motifs, revmots)
+    return motifs
 
-def get_recs(faFile: str, motifs: dict,revmots: dict) -> dict:
+def get_recs(faFile: str, motifs: dict) -> dict:
     '''
     generates dictionary of Record objects from a fasta file and motif dictionaries
 
     Args:
         faFile (str): destination of fasta file
         motifs (dict): dictionary of motifs and their regex patterns
-        revmots (dict): reverse complement to the motifs dictionary
 
     Returns:
         dict: Records dictionary with gene names as the keys
@@ -181,12 +177,7 @@ def get_recs(faFile: str, motifs: dict,revmots: dict) -> dict:
             length = len(currSeq)
             
 
-            if "rev" in header:
-                currMots = revmots
-            else:
-                currMots = motifs
-
-            recs[currGene] = Record(header,currSeq, chrom,pos,length,currGene, currMots)
+            recs[currGene] = Record(header,currSeq, chrom,pos,length,currGene, motifs)
 
             # print(recs[currGene])
             currSeq = ''
@@ -205,14 +196,13 @@ class Record():
     
         self.header = header
         self.pos = pos                              # mapping position
-        self.strand = "-" if "reverse" in header else "+"
         self.chrom = chrom
         self.seq = seq                              # sequence
         self.length = length                        # sequence length
         self.gname = gname                          # name of gene
         self.lines = self.get_lines()
         self.motifs = self.find_motifs(motifs)      # list of motif objects
-        self.title = f'{gname} ({chrom}, {pos} bp, ({self.strand}) strand): {len(self.motifs)} motifs'
+        self.title = f'{gname} ({chrom}, {pos} bp): {len(self.motifs)} motifs'
         # self.title = f'{header}'
 
     def __str__(self):
@@ -343,14 +333,13 @@ faFile, mFile = args.fasta, args.motifs
 
 basename = os.path.basename(faFile).split('.')[0]
 
-motifs,revmots = get_mots(mFile)
+motifs = get_mots(mFile)
 
 # designate colors for each motif 
 markcolors = {seq:color for seq,color in zip(list(motifs), COLORS[:len(motifs)])}
-markcolors.update({revcomp(seq):color for seq,color in zip(list(motifs), COLORS[:len(motifs)])})
 
 # generate Records
-recs = get_recs(faFile,motifs,revmots)
+recs = get_recs(faFile,motifs)
 
 # calculate total number of lines to draw
 numlines = sum([len(recs[rec].lines) for rec in recs])
@@ -364,6 +353,8 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
     ctx = cairo.Context(surface)
 
     ctx.set_source_rgba(0,0,0,1)
+
+    # for blending colors in case of motif overlap
     ctx.set_operator(cairo.OPERATOR_ADD)
 
     ctx.select_font_face(FONT, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
