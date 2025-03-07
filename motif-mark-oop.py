@@ -11,7 +11,7 @@ EXON_HEIGHT = ROW_HEIGHT//2         # how tall to draw the exon boxes
 MOTIF_STAGGER = 1                   # how much to stagger the motifs
 MARK_HEIGHT = EXON_HEIGHT - \
                 MOTIF_STAGGER*2     # how tall to draw the marks
-RECORD_WIDTH = 1000                 # maximum width (in pixels) to draw each record
+MAX_WIDTH = 1000                    # maximum width (in pixels) to draw each record
 INDENT = 5                          # how many pixels (from left) to indent the image
 FONT = "Arial"                      # text font
 FONTSIZE = 14                       # text font size
@@ -224,7 +224,7 @@ class Record():
             list: list of tuples containing intron/exon segments for each line in the record
         '''
 
-        wid = (RECORD_WIDTH-2*INDENT)*BP_PER_PIXEL
+        wid = (MAX_WIDTH-2*INDENT)*BP_PER_PIXEL
 
         lines = textwrap.wrap(self.seq, width=wid)
         seglines = []
@@ -315,8 +315,8 @@ class Motif():
         self.seq = seq
         self.length = len(seq)
         self.start = start
-        self.x = start%(RECORD_WIDTH*BP_PER_PIXEL) + INDENT
-        self.y = (start//(RECORD_WIDTH*BP_PER_PIXEL))*ROW_HEIGHT +\
+        self.x = start%(MAX_WIDTH*BP_PER_PIXEL) + INDENT
+        self.y = (start//(MAX_WIDTH*BP_PER_PIXEL))*ROW_HEIGHT +\
               (EXON_HEIGHT-MARK_HEIGHT)//2 + ROW_OFFSET
         self.color = markcolors[seq]
 
@@ -341,12 +341,15 @@ markcolors = {seq:color for seq,color in zip(list(motifs), COLORS[:len(motifs)])
 # generate Records
 recs = get_recs(faFile,motifs)
 
+
 # calculate total number of lines to draw
 numlines = sum([len(recs[rec].lines) for rec in recs])
+recwid = min(max([recs[rec].length for rec in recs]),MAX_WIDTH)
+
 
 # start drawing
 with cairo.ImageSurface(cairo.FORMAT_ARGB32,
-                        RECORD_WIDTH + 10*FONTSIZE + 2*INDENT, 
+                        recwid + 10*FONTSIZE + 2*INDENT, 
                         ROW_HEIGHT*(max(len(motifs),numlines)) + 5) as surface:
 
     # Set up context
@@ -371,7 +374,7 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
     row = 1
 
     # show legend title text
-    x = RECORD_WIDTH - 15
+    x = recwid 
     y = row*ROW_HEIGHT - HEADING_OFFSET + ROW_OFFSET 
     ctx.move_to(x,y)
     ctx.show_text("LEGEND:")
@@ -379,7 +382,7 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
     # iterate through motifs
     for i,motif in enumerate(motifs):
         # set x,y coords
-        x = RECORD_WIDTH + 2*INDENT - len(motif)
+        x = recwid + 5*INDENT - len(motif)
         y = (row+i)*ROW_HEIGHT//2 - EXON_HEIGHT//4 
 
         # set color and width based on the motif
@@ -391,7 +394,7 @@ with cairo.ImageSurface(cairo.FORMAT_ARGB32,
         ctx.set_source_rgba(0,0,0,1)
 
         # show motif sequence
-        x = RECORD_WIDTH + 25
+        x = recwid + 7*INDENT
         y = (row+i)*ROW_HEIGHT//2 + 5
         ctx.move_to(x,y)
         ctx.show_text(f'{motif}')
