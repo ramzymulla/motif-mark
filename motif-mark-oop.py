@@ -202,7 +202,7 @@ class Record():
         self.gname = gname                          # name of gene
         self.lines = self.get_lines()
         self.motifs = self.find_motifs(motifs)      # list of motif objects
-        self.title = f'{gname} ({chrom}, {pos} bp): {len(self.motifs)} motifs'
+        self.title = f'{gname} ({chrom}:{pos}):'
         # self.title = f'{header}'
 
     def __str__(self):
